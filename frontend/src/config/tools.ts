@@ -14,6 +14,7 @@ import {
   FileOutput,
   Hash,
   Info,
+  PenSquare,
 } from "lucide-react";
 import type { ToolDefinition, ToolTheme } from "../types/tool";
 import * as pdfApi from "../lib/api/pdfApi";
@@ -344,6 +345,18 @@ export const tools: ToolDefinition[] = [
     resultKind: "download",
     outputFilename: "numbered.pdf",
     call: (files, values, onProgress) => pdfApi.addPageNumbers(files[0], values.position, values.start, onProgress),
+  },
+  {
+    id: "edit-pdf",
+    title: "Edit PDF",
+    description: "Add text, draw, drop in images, and sign — right in the browser.",
+    icon: PenSquare,
+    theme: MONO_THEME,
+    accept: PDF_ACCEPT,
+    multiple: false,
+    minFiles: 1,
+    fields: [],
+    resultKind: "download",
   },
   {
     id: "info",

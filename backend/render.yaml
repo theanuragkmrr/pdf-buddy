@@ -8,4 +8,4 @@ services:
     healthCheckPath: /actuator/health
     envVars:
       - key: APP_CORS_ALLOWED_ORIGINS
-        value: http://localhost:5173
+        value: http://localhost:5173,https://pdf-buddy-ilnd.vercel.app

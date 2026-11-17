@@ -21,6 +21,8 @@ export interface ToolDefinition {
   accept: Record<string, string[]>;
   multiple: boolean;
   minFiles: number;
+  /** Tool can run independently per-file across many uploads; results are zipped into one download. */
+  batchable?: boolean;
   fields: ToolField[];
   resultKind: ResultKind;
   outputFilename?: string;

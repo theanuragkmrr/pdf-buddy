@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import JSZip from "jszip";
 import { tools } from "../config/tools";
 import { Dropzone } from "../components/Dropzone";
 import { Toast } from "../components/Toast";
@@ -20,6 +21,14 @@ function initialValues(toolId: string): Record<string, string> {
   return saved ? { ...defaults, ...saved } : defaults;
 }
 
+/** "report.pdf" + "compressed.pdf" -> "report-compressed.pdf" — keeps batch zip entries traceable to their source file. */
+function deriveBatchEntryName(originalName: string, outputFilename: string): string {
+  const ext = outputFilename.split(".").pop() ?? "pdf";
+  const suffix = outputFilename.replace(/\.[^.]+$/, "");
+  const base = originalName.replace(/\.[^.]+$/, "");
+  return `${base}-${suffix}.${ext}`;
+}
+
 export function ToolPage() {
   const { toolId } = useParams<{ toolId: string }>();
   const tool = tools.find((t) => t.id === toolId);
@@ -31,6 +40,16 @@ export function ToolPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<PdfInfo | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [resultBlob, setResultBlob] = useState<Blob | null>(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
+
+  // Object URLs aren't garbage-collected automatically — revoke the previous one
+  // whenever it's replaced, and on unmount.
+  useEffect(() => {
+    return () => {
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+    };
+  }, [resultUrl]);
 
   if (!tool) {
     return <Navigate to="/" replace />;
@@ -47,20 +66,65 @@ export function ToolPage() {
     });
   }
 
+  const isPdfOutput = tool.outputFilename?.toLowerCase().endsWith(".pdf") ?? false;
+  const isBatchRun = Boolean(tool.batchable) && files.length > 1;
+
+  async function runBatch() {
+    const zip = new JSZip();
+    const failed: string[] = [];
+    let succeeded = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const blob = await tool!.call!([file], values, (pct) => {
+          setProgress(Math.round(((i + pct / 100) / files.length) * 100));
+        });
+        zip.file(deriveBatchEntryName(file.name, tool!.outputFilename ?? "result"), blob);
+        succeeded++;
+      } catch {
+        failed.push(file.name);
+      }
+    }
+
+    if (succeeded === 0) {
+      setError("All files failed to process. Check that each one matches what this tool expects.");
+      return;
+    }
+
+    const zipBlob = await zip.generateAsync({ type: "blob" });
+    downloadBlob(zipBlob, `batch-${tool!.id}.zip`);
+    setToast(
+      failed.length === 0
+        ? `All ${succeeded} files processed — zip downloaded`
+        : `${succeeded}/${files.length} succeeded (failed: ${failed.join(", ")})`,
+    );
+  }
+
   async function handleSubmit() {
     setIsLoading(true);
     setError(null);
     setInfo(null);
     setProgress(0);
+    setResultBlob(null);
+    setResultUrl(null);
 
     try {
       if (tool!.resultKind === "info" && tool!.infoCall) {
         setInfo(await tool!.infoCall(files[0]));
         setToast("PDF info loaded");
+      } else if (isBatchRun) {
+        await runBatch();
       } else if (tool!.call) {
         const blob = await tool!.call(files, values, setProgress);
-        downloadBlob(blob, tool!.outputFilename ?? "result");
-        setToast("Downloaded successfully");
+        if (isPdfOutput) {
+          setResultBlob(blob);
+          setResultUrl(URL.createObjectURL(blob));
+          setToast("Ready — preview below");
+        } else {
+          downloadBlob(blob, tool!.outputFilename ?? "result");
+          setToast("Downloaded successfully");
+        }
       }
     } catch (err) {
       setError(await extractErrorMessage(err));
@@ -89,7 +153,17 @@ export function ToolPage() {
         </div>
       </div>
 
-      <Dropzone files={files} onFilesChange={setFiles} accept={tool.accept} multiple={tool.multiple} />
+      <Dropzone
+        files={files}
+        onFilesChange={setFiles}
+        accept={tool.accept}
+        multiple={tool.multiple || tool.batchable}
+        hint={
+          tool.batchable
+            ? "Add multiple files to batch-process them — each runs independently and results are zipped together"
+            : undefined
+        }
+      />
 
       {tool.fields.length > 0 && (
         <div className="mt-6 flex flex-col gap-4">
@@ -137,6 +211,23 @@ export function ToolPage() {
 
       {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>}
 
+      {resultUrl && (
+        <div className="mt-4 flex flex-col gap-3">
+          <iframe
+            src={resultUrl}
+            title="Result preview"
+            className="h-[480px] w-full rounded-xl border border-neutral-200 bg-white"
+          />
+          <button
+            type="button"
+            onClick={() => resultBlob && downloadBlob(resultBlob, tool.outputFilename ?? "result")}
+            className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium text-white shadow-sm transition hover:shadow-md ${tool.theme.button}`}
+          >
+            Download
+          </button>
+        </div>
+      )}
+
       {info && (
         <dl className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-neutral-200 bg-white p-4 text-sm shadow-sm">
           <dt className="text-neutral-400">File name</dt>
@@ -161,7 +252,13 @@ export function ToolPage() {
         className={`mt-6 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-3 font-medium text-white shadow-sm transition hover:shadow-md active:shadow-sm disabled:cursor-not-allowed disabled:opacity-40 ${tool.theme.button}`}
       >
         {isLoading && <Loader2 className="animate-spin" size={18} />}
-        {isLoading ? "Processing..." : tool.resultKind === "info" ? "Check PDF" : tool.title}
+        {isLoading
+          ? "Processing..."
+          : tool.resultKind === "info"
+            ? "Check PDF"
+            : isBatchRun
+              ? `Process ${files.length} files`
+              : tool.title}
       </button>
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}

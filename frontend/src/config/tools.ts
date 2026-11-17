@@ -55,6 +55,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       {
         name: "ranges",
@@ -76,6 +77,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       {
         name: "level",
@@ -102,6 +104,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       {
         name: "angle",
@@ -135,6 +138,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       {
         name: "format",
@@ -182,6 +186,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [],
     resultKind: "download",
     outputFilename: "converted.docx",
@@ -196,6 +201,7 @@ export const tools: ToolDefinition[] = [
     accept: DOCX_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [],
     resultKind: "download",
     outputFilename: "converted.pdf",
@@ -210,6 +216,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       { name: "password", label: "Password", type: "password", required: true },
       {
@@ -232,6 +239,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [{ name: "password", label: "Password", type: "password", required: true }],
     resultKind: "download",
     outputFilename: "unlocked.pdf",
@@ -246,6 +254,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       { name: "text", label: "Watermark text", type: "text", required: true },
       { name: "fontSize", label: "Font size", type: "number", defaultValue: "40", min: 8, max: 200 },
@@ -280,6 +289,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       { name: "pages", label: "Pages to delete", type: "text", placeholder: "e.g. 2,4,6", required: true },
     ],
@@ -296,6 +306,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       { name: "pages", label: "Pages to extract", type: "text", placeholder: "e.g. 1-3,5", required: true },
     ],
@@ -312,6 +323,7 @@ export const tools: ToolDefinition[] = [
     accept: PDF_ACCEPT,
     multiple: false,
     minFiles: 1,
+    batchable: true,
     fields: [
       {
         name: "position",

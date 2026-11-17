@@ -137,7 +137,7 @@ export function ToolPage() {
   const Icon = tool.icon;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-12">
+    <div className={`mx-auto px-6 py-12 transition-[max-width] ${resultUrl ? "max-w-4xl" : "max-w-2xl"}`}>
       <Link to="/" className="mb-6 inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900">
         <ArrowLeft size={16} />
         All tools
@@ -216,7 +216,7 @@ export function ToolPage() {
           <iframe
             src={resultUrl}
             title="Result preview"
-            className="h-[480px] w-full rounded-xl border border-neutral-200 bg-white"
+            className="h-[80vh] min-h-[600px] w-full rounded-xl border border-neutral-200 bg-white"
           />
           <button
             type="button"

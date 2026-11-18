@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, MousePointer2, PenLine, Redo2, Signature, Square, Trash2, Type, Undo2 } from "lucide-react";
+import { ArrowLeft, Circle, Image as ImageIcon, Minus, MousePointer2, PenLine, Redo2, Signature, Square, Trash2, Type, Undo2 } from "lucide-react";
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 // eslint-disable-next-line import/no-unresolved
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -8,7 +8,7 @@ import { Dropzone } from "../components/Dropzone";
 import { Toast } from "../components/Toast";
 import { downloadBlob } from "../lib/download";
 import { exportEditedPdf } from "../lib/pdfExport";
-import type { EditorElement, EditorTool, ImageElement, ShapeElement, TextElement } from "../types/editor";
+import type { EditorElement, EditorTool, ImageElement, ShapeElement, ShapeKind, ShapeStyle, TextElement } from "../types/editor";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -31,6 +31,9 @@ export function EditPdfPage() {
   const [drawWidth, setDrawWidth] = useState(3);
   const [shapeColor, setShapeColor] = useState("#ffffff");
   const [shapeOpacity, setShapeOpacity] = useState(1);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>("rectangle");
+  const [shapeStyle, setShapeStyle] = useState<ShapeStyle>("filled");
+  const [shapeStrokeWidth, setShapeStrokeWidth] = useState(3);
 
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -240,7 +243,17 @@ export function EditPdfPage() {
     if (tool === "shape" && shapeDraftStart.current && draftShape) {
       if (draftShape.width > 4 && draftShape.height > 4) {
         pushHistory();
-        const el: ShapeElement = { id: uid(), kind: "shape", page: pageNum, ...draftShape, color: shapeColor, opacity: shapeOpacity };
+        const el: ShapeElement = {
+          id: uid(),
+          kind: "shape",
+          shapeKind,
+          style: shapeKind === "line" ? "hollow" : shapeStyle,
+          page: pageNum,
+          ...draftShape,
+          color: shapeColor,
+          opacity: shapeOpacity,
+          strokeWidth: shapeStrokeWidth,
+        };
         setElements((prev) => [...prev, el]);
         setSelectedId(el.id);
       }
@@ -539,10 +552,71 @@ export function EditPdfPage() {
         )}
         {tool === "shape" && (
           <>
+            <div className="flex items-center gap-0.5 rounded-lg bg-neutral-100 p-0.5">
+              <button
+                type="button"
+                title="Rectangle"
+                onClick={() => setShapeKind("rectangle")}
+                className={`rounded-md p-1.5 ${shapeKind === "rectangle" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              >
+                <Square size={15} />
+              </button>
+              <button
+                type="button"
+                title="Ellipse"
+                onClick={() => setShapeKind("ellipse")}
+                className={`rounded-md p-1.5 ${shapeKind === "ellipse" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              >
+                <Circle size={15} />
+              </button>
+              <button
+                type="button"
+                title="Line"
+                onClick={() => setShapeKind("line")}
+                className={`rounded-md p-1.5 ${shapeKind === "line" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+              >
+                <Minus size={15} />
+              </button>
+            </div>
+
+            {shapeKind !== "line" && (
+              <div className="flex items-center gap-0.5 rounded-lg bg-neutral-100 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setShapeStyle("filled")}
+                  className={`rounded-md px-2 py-1 ${shapeStyle === "filled" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+                >
+                  Filled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShapeStyle("hollow")}
+                  className={`rounded-md px-2 py-1 ${shapeStyle === "hollow" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+                >
+                  Hollow
+                </button>
+              </div>
+            )}
+
             <input type="color" value={shapeColor} onChange={(e) => setShapeColor(e.target.value)} className="h-8 w-8 rounded" />
-            <button type="button" onClick={() => setShapeColor("#ffffff")} className="rounded-lg px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100">
-              White (cover up)
-            </button>
+            {shapeKind !== "line" && shapeStyle === "filled" && (
+              <button type="button" onClick={() => setShapeColor("#ffffff")} className="rounded-lg px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100">
+                White (cover up)
+              </button>
+            )}
+
+            {(shapeKind === "line" || shapeStyle === "hollow") && (
+              <input
+                type="number"
+                value={shapeStrokeWidth}
+                min={1}
+                max={30}
+                onChange={(e) => setShapeStrokeWidth(Number(e.target.value))}
+                className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+                title="Stroke width"
+              />
+            )}
+
             <input
               type="range"
               min={0.1}
@@ -551,8 +625,9 @@ export function EditPdfPage() {
               value={shapeOpacity}
               onChange={(e) => setShapeOpacity(Number(e.target.value))}
               className="w-24"
+              title="Opacity"
             />
-            <span className="text-xs text-neutral-400">Drag on the page to draw a box</span>
+            <span className="text-xs text-neutral-400">Drag on the page</span>
           </>
         )}
         {selected && (
@@ -589,12 +664,27 @@ export function EditPdfPage() {
           onPointerUp={stopDrawing}
           onPointerLeave={stopDrawing}
         />
-        {draftShape && (
-          <div
-            className="pointer-events-none absolute border-2 border-dashed border-neutral-900"
-            style={{ left: draftShape.x, top: draftShape.y, width: draftShape.width, height: draftShape.height, backgroundColor: shapeColor, opacity: shapeOpacity }}
-          />
-        )}
+        {draftShape &&
+          (shapeKind === "line" ? (
+            <svg
+              className="pointer-events-none absolute overflow-visible"
+              style={{ left: draftShape.x, top: draftShape.y, width: draftShape.width, height: draftShape.height }}
+            >
+              <line x1={0} y1={0} x2={draftShape.width} y2={draftShape.height} stroke={shapeColor} strokeWidth={shapeStrokeWidth * RENDER_SCALE} opacity={shapeOpacity} />
+            </svg>
+          ) : (
+            <div
+              className={`pointer-events-none absolute border-2 border-dashed border-neutral-900 ${shapeKind === "ellipse" ? "rounded-full" : ""}`}
+              style={{
+                left: draftShape.x,
+                top: draftShape.y,
+                width: draftShape.width,
+                height: draftShape.height,
+                backgroundColor: shapeStyle === "filled" ? shapeColor : "transparent",
+                opacity: shapeOpacity,
+              }}
+            />
+          ))}
         {pageElements.map((el) =>
           el.kind === "shape" ? (
             <div
@@ -603,8 +693,22 @@ export function EditPdfPage() {
               onPointerMove={handleElementPointerMove}
               onPointerUp={handleElementPointerUp}
               className={`absolute cursor-move ${selectedId === el.id ? "outline outline-2 outline-dashed outline-neutral-900" : ""}`}
-              style={{ left: el.x, top: el.y, width: el.width, height: el.height, backgroundColor: el.color, opacity: el.opacity }}
+              style={{ left: el.x, top: el.y, width: el.width, height: el.height }}
             >
+              {el.shapeKind === "line" ? (
+                <svg className="h-full w-full overflow-visible">
+                  <line x1={0} y1={0} x2={el.width} y2={el.height} stroke={el.color} strokeWidth={el.strokeWidth * RENDER_SCALE} opacity={el.opacity} />
+                </svg>
+              ) : (
+                <div
+                  className={`h-full w-full ${el.shapeKind === "ellipse" ? "rounded-full" : ""}`}
+                  style={{
+                    backgroundColor: el.style === "filled" ? el.color : "transparent",
+                    border: el.style === "hollow" ? `${el.strokeWidth * RENDER_SCALE}px solid ${el.color}` : undefined,
+                    opacity: el.opacity,
+                  }}
+                />
+              )}
               <div
                 onPointerDown={(e) => handleElementPointerDown(e, el, "resize")}
                 onPointerMove={handleElementPointerMove}

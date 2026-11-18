@@ -20,9 +20,14 @@ export interface ImageElement {
   dataUrl: string;
 }
 
+export type ShapeKind = "rectangle" | "ellipse" | "line";
+export type ShapeStyle = "filled" | "hollow";
+
 export interface ShapeElement {
   id: string;
   kind: "shape";
+  shapeKind: ShapeKind;
+  style: ShapeStyle;
   page: number;
   x: number;
   y: number;
@@ -30,6 +35,7 @@ export interface ShapeElement {
   height: number;
   color: string;
   opacity: number;
+  strokeWidth: number;
 }
 
 export type EditorElement = TextElement | ImageElement | ShapeElement;

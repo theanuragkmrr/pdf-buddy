@@ -51,14 +51,45 @@ export async function exportEditedPdf(
 
     for (const el of pageElements) {
       if (el.kind === "shape") {
-        page.drawRectangle({
-          x: el.x / renderScale,
-          y: pageHeightPt - el.y / renderScale - el.height / renderScale,
-          width: el.width / renderScale,
-          height: el.height / renderScale,
-          color: hexToColor(el.color),
-          opacity: el.opacity,
-        });
+        const x = el.x / renderScale;
+        const y = pageHeightPt - el.y / renderScale - el.height / renderScale;
+        const w = el.width / renderScale;
+        const h = el.height / renderScale;
+        const filled = el.style === "filled";
+
+        if (el.shapeKind === "line") {
+          page.drawLine({
+            start: { x: el.x / renderScale, y: pageHeightPt - el.y / renderScale },
+            end: { x: (el.x + el.width) / renderScale, y: pageHeightPt - (el.y + el.height) / renderScale },
+            thickness: el.strokeWidth,
+            color: hexToColor(el.color),
+            opacity: el.opacity,
+          });
+        } else if (el.shapeKind === "ellipse") {
+          page.drawEllipse({
+            x: x + w / 2,
+            y: y + h / 2,
+            xScale: w / 2,
+            yScale: h / 2,
+            color: filled ? hexToColor(el.color) : undefined,
+            opacity: filled ? el.opacity : undefined,
+            borderColor: filled ? undefined : hexToColor(el.color),
+            borderWidth: filled ? undefined : el.strokeWidth,
+            borderOpacity: filled ? undefined : el.opacity,
+          });
+        } else {
+          page.drawRectangle({
+            x,
+            y,
+            width: w,
+            height: h,
+            color: filled ? hexToColor(el.color) : undefined,
+            opacity: filled ? el.opacity : undefined,
+            borderColor: filled ? undefined : hexToColor(el.color),
+            borderWidth: filled ? undefined : el.strokeWidth,
+            borderOpacity: filled ? undefined : el.opacity,
+          });
+        }
       } else if (el.kind === "text") {
         if (!el.text.trim()) continue;
         page.drawText(el.text, {

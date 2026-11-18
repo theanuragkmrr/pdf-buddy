@@ -630,6 +630,28 @@ export function EditPdfPage() {
             <span className="text-xs text-neutral-400">Drag on the page</span>
           </>
         )}
+        {selected && selected.kind === "text" && (
+          <>
+            <div className="mx-2 h-6 w-px bg-neutral-200" />
+            <span className="text-xs text-neutral-400">Selected text:</span>
+            <input
+              type="color"
+              value={selected.color}
+              onChange={(e) => updateElement(selected.id, { color: e.target.value })}
+              className="h-8 w-8 rounded"
+              title="Text color"
+            />
+            <input
+              type="number"
+              value={selected.fontSize}
+              min={8}
+              max={96}
+              onChange={(e) => updateElement(selected.id, { fontSize: Number(e.target.value) })}
+              className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+              title="Font size"
+            />
+          </>
+        )}
         {selected && (
           <button type="button" onClick={deleteSelected} className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50">
             <Trash2 size={16} /> Delete selected

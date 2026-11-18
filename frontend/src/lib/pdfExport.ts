@@ -111,6 +111,7 @@ export async function exportEditedPdf(
           y: pageHeightPt - el.y / renderScale - pdfH,
           width: pdfW,
           height: pdfH,
+          opacity: el.opacity,
         });
       }
     }

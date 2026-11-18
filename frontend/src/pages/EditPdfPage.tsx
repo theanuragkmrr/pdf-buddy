@@ -358,6 +358,7 @@ export function EditPdfPage() {
           width: img.width * scale,
           height: img.height * scale,
           dataUrl: reader.result as string,
+          opacity: 1,
         };
         setElements((prev) => [...prev, el]);
         setSelectedId(el.id);
@@ -408,6 +409,7 @@ export function EditPdfPage() {
       width: 220,
       height: (220 * canvas.height) / canvas.width,
       dataUrl: canvas.toDataURL("image/png"),
+      opacity: 1,
     };
     setElements((prev) => [...prev, el]);
     setSelectedId(el.id);
@@ -652,6 +654,74 @@ export function EditPdfPage() {
             />
           </>
         )}
+        {selected && selected.kind === "shape" && tool !== "shape" && (
+          <>
+            <div className="mx-2 h-6 w-px bg-neutral-200" />
+            <span className="text-xs text-neutral-400">Selected shape:</span>
+            <input
+              type="color"
+              value={selected.color}
+              onChange={(e) => updateElement(selected.id, { color: e.target.value })}
+              className="h-8 w-8 rounded"
+              title="Shape color"
+            />
+            {selected.shapeKind !== "line" && (
+              <div className="flex items-center gap-0.5 rounded-lg bg-neutral-100 p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => updateElement(selected.id, { style: "filled" })}
+                  className={`rounded-md px-2 py-1 ${selected.style === "filled" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+                >
+                  Filled
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateElement(selected.id, { style: "hollow" })}
+                  className={`rounded-md px-2 py-1 ${selected.style === "hollow" ? "bg-white shadow-sm" : "text-neutral-500"}`}
+                >
+                  Hollow
+                </button>
+              </div>
+            )}
+            {(selected.shapeKind === "line" || selected.style === "hollow") && (
+              <input
+                type="number"
+                value={selected.strokeWidth}
+                min={1}
+                max={30}
+                onChange={(e) => updateElement(selected.id, { strokeWidth: Number(e.target.value) })}
+                className="w-16 rounded-lg border border-neutral-300 px-2 py-1 text-sm"
+                title="Stroke width"
+              />
+            )}
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={selected.opacity}
+              onChange={(e) => updateElement(selected.id, { opacity: Number(e.target.value) })}
+              className="w-24"
+              title="Opacity"
+            />
+          </>
+        )}
+        {selected && selected.kind === "image" && (
+          <>
+            <div className="mx-2 h-6 w-px bg-neutral-200" />
+            <span className="text-xs text-neutral-400">Selected image:</span>
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={selected.opacity}
+              onChange={(e) => updateElement(selected.id, { opacity: Number(e.target.value) })}
+              className="w-24"
+              title="Opacity"
+            />
+          </>
+        )}
         {selected && (
           <button type="button" onClick={deleteSelected} className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50">
             <Trash2 size={16} /> Delete selected
@@ -766,7 +836,7 @@ export function EditPdfPage() {
               className={`absolute cursor-move ${selectedId === el.id ? "outline outline-2 outline-dashed outline-neutral-900" : ""}`}
               style={{ left: el.x, top: el.y, width: el.width, height: el.height }}
             >
-              <img src={el.dataUrl} alt="" className="h-full w-full object-contain" draggable={false} />
+              <img src={el.dataUrl} alt="" className="h-full w-full object-contain" style={{ opacity: el.opacity }} draggable={false} />
               <div
                 onPointerDown={(e) => handleElementPointerDown(e, el, "resize")}
                 onPointerMove={handleElementPointerMove}

@@ -18,6 +18,7 @@ export interface ImageElement {
   width: number;
   height: number;
   dataUrl: string;
+  opacity: number;
 }
 
 export type ShapeKind = "rectangle" | "ellipse" | "line";

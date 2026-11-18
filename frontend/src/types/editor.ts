@@ -20,6 +20,18 @@ export interface ImageElement {
   dataUrl: string;
 }
 
-export type EditorElement = TextElement | ImageElement;
+export interface ShapeElement {
+  id: string;
+  kind: "shape";
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+  opacity: number;
+}
 
-export type EditorTool = "select" | "text" | "draw";
+export type EditorElement = TextElement | ImageElement | ShapeElement;
+
+export type EditorTool = "select" | "text" | "draw" | "shape";

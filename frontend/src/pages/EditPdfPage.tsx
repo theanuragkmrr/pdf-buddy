@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, MousePointer2, PenLine, Signature, Trash2, Type } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, MousePointer2, PenLine, Signature, Square, Trash2, Type } from "lucide-react";
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 // eslint-disable-next-line import/no-unresolved
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -8,7 +8,7 @@ import { Dropzone } from "../components/Dropzone";
 import { Toast } from "../components/Toast";
 import { downloadBlob } from "../lib/download";
 import { exportEditedPdf } from "../lib/pdfExport";
-import type { EditorElement, EditorTool, ImageElement, TextElement } from "../types/editor";
+import type { EditorElement, EditorTool, ImageElement, ShapeElement, TextElement } from "../types/editor";
 
 GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -29,10 +29,15 @@ export function EditPdfPage() {
   const [fontSize, setFontSize] = useState(20);
   const [drawColor, setDrawColor] = useState("#111111");
   const [drawWidth, setDrawWidth] = useState(3);
+  const [shapeColor, setShapeColor] = useState("#ffffff");
+  const [shapeOpacity, setShapeOpacity] = useState(1);
 
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const inkByPage = useRef<Record<number, string>>({});
+
+  const shapeDraftStart = useRef<{ x: number; y: number } | null>(null);
+  const [draftShape, setDraftShape] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
   const [signatureOpen, setSignatureOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -44,7 +49,7 @@ export function EditPdfPage() {
   const inkCanvasRef = useRef<HTMLCanvasElement>(null);
   const sigCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDrawing = useRef(false);
-  const dragRef = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; orig: ImageElement | TextElement } | null>(null);
+  const dragRef = useRef<{ id: string; mode: "move" | "resize"; startX: number; startY: number; orig: ImageElement | TextElement | ShapeElement } | null>(null);
 
   useEffect(() => {
     return () => {
@@ -125,16 +130,44 @@ export function EditPdfPage() {
   }
 
   function handleStagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
-    // Clicks that start on a text/image element call stopPropagation in their own
-    // handler, so anything that reaches here genuinely hit the canvas itself.
+    // Clicks that start on a text/image/shape element call stopPropagation in their
+    // own handler, so anything that reaches here genuinely hit the canvas itself.
     if (tool === "text") {
       const { x, y } = canvasPoint(e, canvasRef.current!);
       const el: TextElement = { id: uid(), kind: "text", page: pageNum, x, y, text: "Text", fontSize, color: textColor };
       setElements((prev) => [...prev, el]);
       setSelectedId(el.id);
       setTool("select");
+    } else if (tool === "shape") {
+      const { x, y } = canvasPoint(e, canvasRef.current!);
+      shapeDraftStart.current = { x, y };
+      setDraftShape({ x, y, width: 0, height: 0 });
     } else if (tool === "select") {
       setSelectedId(null);
+    }
+  }
+
+  function handleStagePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (tool !== "shape" || !shapeDraftStart.current) return;
+    const { x, y } = canvasPoint(e, canvasRef.current!);
+    const start = shapeDraftStart.current;
+    setDraftShape({
+      x: Math.min(start.x, x),
+      y: Math.min(start.y, y),
+      width: Math.abs(x - start.x),
+      height: Math.abs(y - start.y),
+    });
+  }
+
+  function handleStagePointerUp() {
+    if (tool === "shape" && shapeDraftStart.current && draftShape) {
+      if (draftShape.width > 4 && draftShape.height > 4) {
+        const el: ShapeElement = { id: uid(), kind: "shape", page: pageNum, ...draftShape, color: shapeColor, opacity: shapeOpacity };
+        setElements((prev) => [...prev, el]);
+        setSelectedId(el.id);
+      }
+      shapeDraftStart.current = null;
+      setDraftShape(null);
     }
   }
 
@@ -198,10 +231,10 @@ export function EditPdfPage() {
 
     if (drag.mode === "move") {
       updateElement(drag.id, { x: drag.orig.x + dx, y: drag.orig.y + dy });
-    } else if (drag.orig.kind === "image") {
+    } else if (drag.orig.kind === "image" || drag.orig.kind === "shape") {
       updateElement(drag.id, {
-        width: Math.max(20, drag.orig.width + dx),
-        height: Math.max(20, drag.orig.height + dy),
+        width: Math.max(10, drag.orig.width + dx),
+        height: Math.max(10, drag.orig.height + dy),
       });
     }
   }
@@ -351,6 +384,13 @@ export function EditPdfPage() {
         >
           <PenLine size={16} /> Draw
         </button>
+        <button
+          type="button"
+          onClick={() => setTool("shape")}
+          className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium ${tool === "shape" ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+        >
+          <Square size={16} /> Shape
+        </button>
         <label className="flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100">
           <ImageIcon size={16} /> Image
           <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleImageUpload} />
@@ -394,6 +434,24 @@ export function EditPdfPage() {
             </button>
           </>
         )}
+        {tool === "shape" && (
+          <>
+            <input type="color" value={shapeColor} onChange={(e) => setShapeColor(e.target.value)} className="h-8 w-8 rounded" />
+            <button type="button" onClick={() => setShapeColor("#ffffff")} className="rounded-lg px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-100">
+              White (cover up)
+            </button>
+            <input
+              type="range"
+              min={0.1}
+              max={1}
+              step={0.05}
+              value={shapeOpacity}
+              onChange={(e) => setShapeOpacity(Number(e.target.value))}
+              className="w-24"
+            />
+            <span className="text-xs text-neutral-400">Drag on the page to draw a box</span>
+          </>
+        )}
         {selected && (
           <button type="button" onClick={deleteSelected} className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50">
             <Trash2 size={16} /> Delete selected
@@ -413,8 +471,10 @@ export function EditPdfPage() {
 
       <div
         className="relative mx-auto select-none overflow-auto rounded-xl border border-neutral-200 bg-neutral-100"
-        style={{ touchAction: "none" }}
+        style={{ touchAction: "none", cursor: tool === "shape" ? "crosshair" : "default" }}
         onPointerDown={handleStagePointerDown}
+        onPointerMove={handleStagePointerMove}
+        onPointerUp={handleStagePointerUp}
       >
         <canvas ref={canvasRef} className="block" />
         <canvas
@@ -426,8 +486,30 @@ export function EditPdfPage() {
           onPointerUp={stopDrawing}
           onPointerLeave={stopDrawing}
         />
+        {draftShape && (
+          <div
+            className="pointer-events-none absolute border-2 border-dashed border-neutral-900"
+            style={{ left: draftShape.x, top: draftShape.y, width: draftShape.width, height: draftShape.height, backgroundColor: shapeColor, opacity: shapeOpacity }}
+          />
+        )}
         {pageElements.map((el) =>
-          el.kind === "text" ? (
+          el.kind === "shape" ? (
+            <div
+              key={el.id}
+              onPointerDown={(e) => handleElementPointerDown(e, el, "move")}
+              onPointerMove={handleElementPointerMove}
+              onPointerUp={handleElementPointerUp}
+              className={`absolute cursor-move ${selectedId === el.id ? "outline outline-2 outline-dashed outline-neutral-900" : ""}`}
+              style={{ left: el.x, top: el.y, width: el.width, height: el.height, backgroundColor: el.color, opacity: el.opacity }}
+            >
+              <div
+                onPointerDown={(e) => handleElementPointerDown(e, el, "resize")}
+                onPointerMove={handleElementPointerMove}
+                onPointerUp={handleElementPointerUp}
+                className="absolute -bottom-1.5 -right-1.5 h-3 w-3 cursor-nwse-resize rounded-full bg-neutral-900"
+              />
+            </div>
+          ) : el.kind === "text" ? (
             <div
               key={el.id}
               onPointerDown={(e) => handleElementPointerDown(e, el, "move")}

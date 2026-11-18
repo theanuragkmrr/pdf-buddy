@@ -43,8 +43,23 @@ export async function exportEditedPdf(
       page.drawImage(pngImage, { x: 0, y: 0, width: page.getWidth(), height: pageHeightPt });
     }
 
-    for (const el of elements.filter((e) => e.page === pageNum)) {
-      if (el.kind === "text") {
+    // Draw order matters: shapes act as a backdrop (e.g. covering old text),
+    // images sit above that, and text goes on top of everything.
+    const pageElements = elements.filter((e) => e.page === pageNum);
+    const order = { shape: 0, image: 1, text: 2 } as const;
+    pageElements.sort((a, b) => order[a.kind] - order[b.kind]);
+
+    for (const el of pageElements) {
+      if (el.kind === "shape") {
+        page.drawRectangle({
+          x: el.x / renderScale,
+          y: pageHeightPt - el.y / renderScale - el.height / renderScale,
+          width: el.width / renderScale,
+          height: el.height / renderScale,
+          color: hexToColor(el.color),
+          opacity: el.opacity,
+        });
+      } else if (el.kind === "text") {
         if (!el.text.trim()) continue;
         page.drawText(el.text, {
           x: el.x / renderScale,

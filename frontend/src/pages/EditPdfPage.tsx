@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, MousePointer2, PenLine, Signature, Square, Trash2, Type } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, MousePointer2, PenLine, Redo2, Signature, Square, Trash2, Type, Undo2 } from "lucide-react";
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 // eslint-disable-next-line import/no-unresolved
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -35,6 +35,14 @@ export function EditPdfPage() {
   const [elements, setElements] = useState<EditorElement[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const inkByPage = useRef<Record<number, string>>({});
+
+  interface HistoryEntry {
+    elements: EditorElement[];
+    page: number;
+    ink: string | null;
+  }
+  const [undoStack, setUndoStack] = useState<HistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<HistoryEntry[]>([]);
 
   const shapeDraftStart = useRef<{ x: number; y: number } | null>(null);
   const [draftShape, setDraftShape] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -129,10 +137,79 @@ export function EditPdfPage() {
     setPageNum(next);
   }
 
+  function getInkSnapshot(page: number): string | null {
+    if (page === pageNum && inkCanvasRef.current) return inkCanvasRef.current.toDataURL("image/png");
+    return inkByPage.current[page] ?? null;
+  }
+
+  function restoreInkSnapshot(page: number, dataUrl: string | null) {
+    if (dataUrl) inkByPage.current[page] = dataUrl;
+    else delete inkByPage.current[page];
+
+    if (page === pageNum && inkCanvasRef.current) {
+      const canvas = inkCanvasRef.current;
+      const ctx = canvas.getContext("2d")!;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (dataUrl) {
+        const img = new window.Image();
+        img.onload = () => ctx.drawImage(img, 0, 0);
+        img.src = dataUrl;
+      }
+    }
+  }
+
+  // Call right before any mutation (adding/moving/resizing/deleting an element,
+  // starting an ink stroke, clearing a page) to snapshot the "before" state.
+  function pushHistory() {
+    const entry: HistoryEntry = { elements, page: pageNum, ink: getInkSnapshot(pageNum) };
+    setUndoStack((prev) => [...prev.slice(-49), entry]);
+    setRedoStack([]);
+  }
+
+  function undo() {
+    setUndoStack((prevUndo) => {
+      if (prevUndo.length === 0) return prevUndo;
+      const last = prevUndo[prevUndo.length - 1];
+      const current: HistoryEntry = { elements, page: pageNum, ink: getInkSnapshot(pageNum) };
+      setRedoStack((prevRedo) => [...prevRedo, current]);
+      setElements(last.elements);
+      restoreInkSnapshot(last.page, last.ink);
+      if (last.page !== pageNum) setPageNum(last.page);
+      setSelectedId(null);
+      return prevUndo.slice(0, -1);
+    });
+  }
+
+  function redo() {
+    setRedoStack((prevRedo) => {
+      if (prevRedo.length === 0) return prevRedo;
+      const next = prevRedo[prevRedo.length - 1];
+      const current: HistoryEntry = { elements, page: pageNum, ink: getInkSnapshot(pageNum) };
+      setUndoStack((prevUndo) => [...prevUndo, current]);
+      setElements(next.elements);
+      restoreInkSnapshot(next.page, next.ink);
+      if (next.page !== pageNum) setPageNum(next.page);
+      setSelectedId(null);
+      return prevRedo.slice(0, -1);
+    });
+  }
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   function handleStagePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Clicks that start on a text/image/shape element call stopPropagation in their
     // own handler, so anything that reaches here genuinely hit the canvas itself.
     if (tool === "text") {
+      pushHistory();
       const { x, y } = canvasPoint(e, canvasRef.current!);
       const el: TextElement = { id: uid(), kind: "text", page: pageNum, x, y, text: "Text", fontSize, color: textColor };
       setElements((prev) => [...prev, el]);
@@ -162,6 +239,7 @@ export function EditPdfPage() {
   function handleStagePointerUp() {
     if (tool === "shape" && shapeDraftStart.current && draftShape) {
       if (draftShape.width > 4 && draftShape.height > 4) {
+        pushHistory();
         const el: ShapeElement = { id: uid(), kind: "shape", page: pageNum, ...draftShape, color: shapeColor, opacity: shapeOpacity };
         setElements((prev) => [...prev, el]);
         setSelectedId(el.id);
@@ -173,6 +251,7 @@ export function EditPdfPage() {
 
   function handleInkPointerDown(e: React.PointerEvent<HTMLCanvasElement>) {
     if (tool !== "draw") return;
+    pushHistory();
     isDrawing.current = true;
     const ctx = inkCanvasRef.current!.getContext("2d")!;
     const { x, y } = canvasPoint(e, inkCanvasRef.current!);
@@ -197,6 +276,7 @@ export function EditPdfPage() {
   }
 
   function clearPageDrawing() {
+    pushHistory();
     const ink = inkCanvasRef.current!;
     ink.getContext("2d")!.clearRect(0, 0, ink.width, ink.height);
     delete inkByPage.current[pageNum];
@@ -208,12 +288,14 @@ export function EditPdfPage() {
 
   function deleteSelected() {
     if (!selectedId) return;
+    pushHistory();
     setElements((prev) => prev.filter((el) => el.id !== selectedId));
     setSelectedId(null);
   }
 
   function handleElementPointerDown(e: React.PointerEvent<HTMLDivElement>, el: EditorElement, mode: "move" | "resize") {
     e.stopPropagation();
+    pushHistory();
     (e.target as Element).setPointerCapture(e.pointerId);
     setSelectedId(el.id);
     dragRef.current = { id: el.id, mode, startX: e.clientX, startY: e.clientY, orig: el };
@@ -253,6 +335,7 @@ export function EditPdfPage() {
       img.onload = () => {
         const maxW = 200;
         const scale = Math.min(1, maxW / img.width);
+        pushHistory();
         const el: ImageElement = {
           id: uid(),
           kind: "image",
@@ -301,6 +384,7 @@ export function EditPdfPage() {
   }
 
   function insertSignature() {
+    pushHistory();
     const canvas = sigCanvasRef.current!;
     const el: ImageElement = {
       id: uid(),
@@ -363,6 +447,25 @@ export function EditPdfPage() {
       </Link>
 
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+        <button
+          type="button"
+          onClick={undo}
+          disabled={undoStack.length === 0}
+          title="Undo"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+        >
+          <Undo2 size={16} />
+        </button>
+        <button
+          type="button"
+          onClick={redo}
+          disabled={redoStack.length === 0}
+          title="Redo"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-30"
+        >
+          <Redo2 size={16} />
+        </button>
+        <div className="mx-1 h-6 w-px bg-neutral-200" />
         <button
           type="button"
           onClick={() => setTool("select")}
@@ -520,6 +623,7 @@ export function EditPdfPage() {
             >
               <textarea
                 value={el.text}
+                onFocus={pushHistory}
                 onChange={(e) => updateElement(el.id, { text: e.target.value })}
                 onPointerDown={(e) => e.stopPropagation()}
                 rows={1}

@@ -25,6 +25,7 @@ public class PdfController {
     private final ImageToPdfService imageToPdfService;
     private final PdfToWordService pdfToWordService;
     private final WordToPdfService wordToPdfService;
+    private final PdfToExcelService pdfToExcelService;
     private final ProtectService protectService;
     private final UnlockService unlockService;
     private final WatermarkService watermarkService;
@@ -81,6 +82,12 @@ public class PdfController {
     @PostMapping(value = "/word-to-pdf", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<byte[]> wordToPdf(@RequestParam("file") MultipartFile file) {
         return pdfFile(wordToPdfService.convertToPdf(file), "converted.pdf");
+    }
+
+    @PostMapping(value = "/to-excel", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<byte[]> toExcel(@RequestParam("file") MultipartFile file) {
+        return fileResponse(pdfToExcelService.convertToXlsx(file), "converted.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
     @PostMapping(value = "/protect", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

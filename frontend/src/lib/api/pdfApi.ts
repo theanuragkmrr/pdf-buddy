@@ -89,6 +89,12 @@ export async function wordToPdf(file: File, onProgress?: ProgressCallback): Prom
   return postForBlob("/pdf/word-to-pdf", formData, onProgress);
 }
 
+export async function pdfToExcel(file: File, onProgress?: ProgressCallback): Promise<Blob> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return postForBlob("/pdf/to-excel", formData, onProgress);
+}
+
 export async function protectPdf(
   file: File,
   password: string,

@@ -15,6 +15,7 @@ import {
   Hash,
   Info,
   PenSquare,
+  FileSpreadsheet,
 } from "lucide-react";
 import type { ToolDefinition, ToolTheme } from "../types/tool";
 import * as pdfApi from "../lib/api/pdfApi";
@@ -192,6 +193,21 @@ export const tools: ToolDefinition[] = [
     resultKind: "download",
     outputFilename: "converted.docx",
     call: (files, _values, onProgress) => pdfApi.pdfToWord(files[0], onProgress),
+  },
+  {
+    id: "to-excel",
+    title: "PDF to Excel",
+    description: "Pull tables and text out into an editable .xlsx file.",
+    icon: FileSpreadsheet,
+    theme: MONO_THEME,
+    accept: PDF_ACCEPT,
+    multiple: false,
+    minFiles: 1,
+    batchable: true,
+    fields: [],
+    resultKind: "download",
+    outputFilename: "converted.xlsx",
+    call: (files, _values, onProgress) => pdfApi.pdfToExcel(files[0], onProgress),
   },
   {
     id: "word-to-pdf",
